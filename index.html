@@ -180,12 +180,12 @@
                 if (saved) {
                     return JSON.parse(saved);
                 }
-                // dietPlan의 키에 맞춰 초기화
-                const initial = {};
-                Object.keys(dietPlan).forEach(mealTime => {
-                    initial[mealTime] = { wet: 0, dry: 0, snack: 0, done: false };
-                });
-                return initial;
+                // 기본값
+                return {
+                    morning: { wet: 0, dry: 0, snack: 0, done: false },
+                    lunch: { wet: 0, dry: 0, snack: 0, done: false },
+                    dinner: { wet: 0, dry: 0, snack: 0, done: false }
+                };
             });
 
             // actualIntake 변경 시 자동 저장
@@ -690,7 +690,7 @@
 
                     {/* 식사 시간대별 카드 */}
                     {Object.entries(dietPlan).map(([mealTime, meal]) => {
-                        const actual = actualIntake[mealTime];
+                        const actual = actualIntake[mealTime] || { wet: 0, dry: 0, snack: 0, done: false };
                         const mealCalories = calculateCalories(actual.wet, actual.dry, actual.snack);
                         const icons = {
                             morning: '🌅',
