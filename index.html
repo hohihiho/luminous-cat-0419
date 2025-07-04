@@ -2,17 +2,66 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#8b5cf6">
     <title>루 식단 관리 🐱</title>
+    
+    <!-- PWA 매니페스트 -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuujqCDsi53ri6gg6rSA66asIiwKICAic2hvcnRfbmFtZSI6ICLro6gg7Iud64uyIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmOWZhZmIiLAogICJ0aGVtZV9jb2xvciI6ICIjOGI1Y2Y2IiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiZGF0YTppbWFnZS9wbmc7YmFzZTY0LGlWQk9SdzBLR2dvQUFBQU5TVWhFVWdBQUFIZ0FBQUI0Q0FZQUFBQ1RORkQ5QUFBQUJITkNTVlFJQ0FnSWZBaGtpQUFBQUFsd1NGbHpBQUFMRWdBQUN4SUJNVXE3REFBQUFBWjBTRmxNQUFBQUFBQUFBQUFBQUFBQUFBRDVLM0FBQUFBQmwwUlZoMGNtOWlaU0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQkl4VEFBQUFBQkpSVTVFcmtKZ2dnPT0iLAogICAgICAic2l6ZXMiOiAiMTIweDEyMCIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0KICBdCn0=">
+    
+    <!-- iOS 아이콘 -->
+    <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAYAAACTNFD9AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIBMUq7DAAAABl0RVh0cmVhdGUAAAAAAAAAAAAAAAAAAAAAAAAAABI4TAAAAABJRFBNZggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIxTAAAAABJRU5ErkJggg==">
+    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        input, textarea {
+            -webkit-user-select: auto;
+            user-select: auto;
+        }
+        
         body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+            background-color: #f9fafb;
+        }
+        
+        /* iOS 안전 영역 대응 */
+        .safe-area-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        /* 스크롤 부드럽게 */
+        .smooth-scroll {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+        
+        /* 입력 필드 확대 방지 */
+        input[type="number"],
+        input[type="text"],
+        input[type="date"],
+        input[type="password"],
+        textarea {
+            font-size: 16px !important;
+        }
+        
+        /* 바운스 효과 제거 */
+        html, body {
+            overscroll-behavior: none;
         }
     </style>
 </head>
@@ -65,45 +114,85 @@
             };
 
             // 루의 기본 정보
-            const [catInfo, setCatInfo] = useState({
-                name: '루',
-                birthDate: '2025-03-21',
-                weight: 1.78,
-                age: calculateAge('2025-03-21'),
-                targetCalories: 350
+            const [catInfo, setCatInfo] = useState(() => {
+                const saved = localStorage.getItem('catInfo');
+                if (saved) {
+                    const info = JSON.parse(saved);
+                    return {
+                        ...info,
+                        age: calculateAge(info.birthDate)
+                    };
+                }
+                return {
+                    name: '루',
+                    birthDate: '2025-03-21',
+                    weight: 1.78,
+                    age: calculateAge('2025-03-21'),
+                    targetCalories: 350
+                };
             });
+
+            // catInfo 변경 시 자동 저장
+            useEffect(() => {
+                localStorage.setItem('catInfo', JSON.stringify(catInfo));
+            }, [catInfo]);
 
             // 식단 계획
-            const [dietPlan, setDietPlan] = useState({
-                morning: {
-                    time: '07:00~09:00',
-                    wet: 25,
-                    dry: 8,
-                    snack: 0,
-                    notes: '어제 못 먹은 분량 고려해서 습식 비중 높임'
-                },
-                lunch: {
-                    time: '12:00~14:00',
-                    wet: 15,
-                    dry: 12,
-                    snack: 3,
-                    notes: '초미니 트릿 2~3g (선택) - 외출 대비 건식 포함'
-                },
-                dinner: {
-                    time: '18:00~20:00',
-                    wet: 30,
-                    dry: 10,
-                    snack: 0,
-                    notes: '츄르 1/3개 (식욕 유도용, 선택사항)'
+            const [dietPlan, setDietPlan] = useState(() => {
+                const saved = localStorage.getItem('dietPlan');
+                if (saved) {
+                    return JSON.parse(saved);
                 }
+                return {
+                    morning: {
+                        time: '07:00~09:00',
+                        wet: 25,
+                        dry: 8,
+                        snack: 0,
+                        notes: '어제 못 먹은 분량 고려해서 습식 비중 높임'
+                    },
+                    lunch: {
+                        time: '12:00~14:00',
+                        wet: 15,
+                        dry: 12,
+                        snack: 3,
+                        notes: '초미니 트릿 2~3g (선택) - 외출 대비 건식 포함'
+                    },
+                    dinner: {
+                        time: '18:00~20:00',
+                        wet: 30,
+                        dry: 10,
+                        snack: 0,
+                        notes: '츄르 1/3개 (식욕 유도용, 선택사항)'
+                    }
+                };
             });
 
-            // 실제 섭취 기록
-            const [actualIntake, setActualIntake] = useState({
-                morning: { wet: 0, dry: 0, snack: 0, done: false },
-                lunch: { wet: 0, dry: 0, snack: 0, done: false },
-                dinner: { wet: 0, dry: 0, snack: 0, done: false }
+            // dietPlan 변경 시 자동 저장
+            useEffect(() => {
+                localStorage.setItem('dietPlan', JSON.stringify(dietPlan));
+            }, [dietPlan]);
+
+            // 실제 섭취 기록 (오늘 날짜별로 저장)
+            const [actualIntake, setActualIntake] = useState(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                const saved = localStorage.getItem(`actualIntake_${todayKey}`);
+                if (saved) {
+                    return JSON.parse(saved);
+                }
+                // dietPlan의 키에 맞춰 초기화
+                const initial = {};
+                Object.keys(dietPlan).forEach(mealTime => {
+                    initial[mealTime] = { wet: 0, dry: 0, snack: 0, done: false };
+                });
+                return initial;
             });
+
+            // actualIntake 변경 시 자동 저장
+            useEffect(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                localStorage.setItem(`actualIntake_${todayKey}`, JSON.stringify(actualIntake));
+            }, [actualIntake]);
 
             // 체중 기록 (날짜별)
             const [weightHistory, setWeightHistory] = useState(() => {
@@ -131,9 +220,30 @@
                 setCatInfo({...catInfo, weight: newWeight});
             };
 
-            // 수분 섭취 및 화장실 (0: 안마심, 1: 조금, 2: 충분)
-            const [waterIntake, setWaterIntake] = useState(0);
-            const [bathroomCheck, setBathroomCheck] = useState(false);
+            // 수분 섭취 및 화장실 (오늘 날짜별로 저장)
+            const [waterIntake, setWaterIntake] = useState(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                const saved = localStorage.getItem(`waterIntake_${todayKey}`);
+                return saved ? parseInt(saved) : 0;
+            });
+            
+            const [bathroomCheck, setBathroomCheck] = useState(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                const saved = localStorage.getItem(`bathroomCheck_${todayKey}`);
+                return saved === 'true';
+            });
+
+            // 수분 섭취 변경 시 자동 저장
+            useEffect(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                localStorage.setItem(`waterIntake_${todayKey}`, waterIntake.toString());
+            }, [waterIntake]);
+
+            // 화장실 체크 변경 시 자동 저장
+            useEffect(() => {
+                const todayKey = today.toISOString().split('T')[0];
+                localStorage.setItem(`bathroomCheck_${todayKey}`, bathroomCheck.toString());
+            }, [bathroomCheck]);
 
             // 현재 탭
             const [activeTab, setActiveTab] = useState('today');
@@ -861,9 +971,11 @@
                                     API 키 받기
                                 </a> (무료 - Google 계정 필요)
                             </p>
-                            <p className="text-xs text-green-600 mt-1">
-                                ✅ API 키는 자동으로 브라우저에 저장됩니다
-                            </p>
+                            {geminiApiKey && (
+                                <p className="text-xs text-green-600 mt-1">
+                                    ✅ API 키 저장됨: {geminiApiKey.slice(0, 10)}...
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -887,6 +999,11 @@
                                         토큰 생성하기
                                     </a> (gist 권한만 필요)
                                 </p>
+                                {gistToken && (
+                                    <p className="text-xs text-green-600 mt-1">
+                                        ✅ 토큰 저장됨: {gistToken.slice(0, 10)}...
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="text-sm text-gray-600">Gist ID</label>
@@ -903,6 +1020,11 @@
                                 <p className="text-xs text-gray-500 mt-1">
                                     Gist ID: ec6b814025b587c361ee08f9bfb10144
                                 </p>
+                                {gistId && (
+                                    <p className="text-xs text-green-600 mt-1">
+                                        ✅ Gist ID 저장됨: {gistId}
+                                    </p>
+                                )}
                             </div>
                             <div className="flex gap-2">
                                 <button
