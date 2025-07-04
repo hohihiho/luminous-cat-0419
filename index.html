@@ -8,19 +8,11 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/lucide@latest/dist/lucide.css">
     <style>
-        /* 모바일 최적화 스타일 */
         body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .lucide {
-            width: 20px;
-            height: 20px;
-            display: inline-block;
-            vertical-align: middle;
         }
     </style>
 </head>
@@ -30,20 +22,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
         
-        // Lucide 아이콘 컴포넌트
-        const Icon = ({ name, className = "" }) => {
-            const icons = {
-                Calendar: "📅",
-                Weight: "⚖️",
-                Droplet: "💧",
-                Check: "✓",
-                Plus: "➕",
-                BarChart3: "📊",
-                Settings: "⚙️"
-            };
-            return <span className={className}>{icons[name] || "•"}</span>;
-        };
-
         const CatDietTracker = () => {
             // 현재 날짜 (KST)
             const today = new Date();
@@ -166,6 +144,121 @@
             const [geminiApiKey, setGeminiApiKey] = useState(() => 
                 localStorage.getItem('geminiApiKey') || ''
             );
+
+            // GitHub Gist 설정
+            const [gistToken, setGistToken] = useState(() => 
+                localStorage.getItem('gistToken') || ''
+            );
+            const [gistId, setGistId] = useState(() => 
+                localStorage.getItem('gistId') || ''
+            );
+            const [syncStatus, setSyncStatus] = useState('');
+
+            // GitHub Gist에 데이터 저장
+            const saveToGist = async () => {
+                if (!gistToken || !gistId) {
+                    setSyncStatus('GitHub 설정이 필요합니다');
+                    return;
+                }
+
+                try {
+                    setSyncStatus('저장 중...');
+                    
+                    const data = {
+                        catInfo: {
+                            name: catInfo.name,
+                            birthDate: catInfo.birthDate,
+                            weight: catInfo.weight
+                        },
+                        records: dailyRecords,
+                        dietPlan: dietPlan,
+                        lastUpdated: new Date().toISOString()
+                    };
+
+                    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `token ${gistToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            files: {
+                                'roo_diet_data.json': {
+                                    content: JSON.stringify(data, null, 2)
+                                }
+                            }
+                        })
+                    });
+
+                    if (response.ok) {
+                        setSyncStatus('✅ 저장 완료!');
+                        setTimeout(() => setSyncStatus(''), 3000);
+                    } else {
+                        setSyncStatus('❌ 저장 실패');
+                    }
+                } catch (error) {
+                    setSyncStatus('❌ 오류 발생');
+                    console.error('Gist 저장 오류:', error);
+                }
+            };
+
+            // GitHub Gist에서 데이터 불러오기
+            const loadFromGist = async () => {
+                if (!gistToken || !gistId) return;
+
+                try {
+                    setSyncStatus('불러오는 중...');
+                    
+                    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+                        headers: {
+                            'Authorization': `token ${gistToken}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        const gist = await response.json();
+                        const content = gist.files['roo_diet_data.json']?.content;
+                        
+                        if (content) {
+                            const data = JSON.parse(content);
+                            
+                            // 데이터 복원
+                            if (data.catInfo) {
+                                setCatInfo({
+                                    ...data.catInfo,
+                                    age: calculateAge(data.catInfo.birthDate),
+                                    targetCalories: catInfo.targetCalories
+                                });
+                            }
+                            
+                            if (data.dietPlan) {
+                                setDietPlan(data.dietPlan);
+                            }
+                            
+                            if (data.records) {
+                                setDailyRecords(data.records);
+                                localStorage.setItem('dailyRecords', JSON.stringify(data.records));
+                            }
+                            
+                            setSyncStatus('✅ 불러오기 완료!');
+                            setTimeout(() => setSyncStatus(''), 3000);
+                        }
+                    }
+                } catch (error) {
+                    setSyncStatus('❌ 불러오기 실패');
+                    console.error('Gist 불러오기 오류:', error);
+                }
+            };
+
+            // 자동 저장 (변경사항 있을 때)
+            useEffect(() => {
+                if (gistToken && gistId) {
+                    const timer = setTimeout(() => {
+                        saveToGist();
+                    }, 5000); // 5초 후 자동 저장
+                    return () => clearTimeout(timer);
+                }
+            }, [dietPlan, actualIntake, waterIntake, bathroomCheck, catInfo.weight]);
 
             // AI 입력창 토글
             const toggleAIInput = () => {
@@ -370,7 +463,7 @@
                         onClick={toggleAIInput}
                         className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg flex items-center justify-center gap-2 hover:opacity-90"
                     >
-                        <Icon name="Plus" />
+                        ➕
                         <span className="font-medium">오늘 식단 짜달라고 요청하기</span>
                     </button>
 
@@ -428,7 +521,7 @@
                         <div className="bg-purple-50 p-4 rounded-lg">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm text-gray-600 flex items-center gap-1">
-                                    <Icon name="Weight" className="w-4 h-4" /> 오늘 체중
+                                    ⚖️ 오늘 체중
                                 </span>
                                 <div className="flex items-center gap-1">
                                     <input
@@ -444,7 +537,7 @@
                             </div>
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-gray-600 flex items-center gap-1">
-                                    <Icon name="Droplet" className="w-4 h-4" /> 수분
+                                    💧 수분
                                 </span>
                                 <div className="flex gap-1">
                                     <button
@@ -524,7 +617,7 @@
                                                 : 'bg-gray-200 text-gray-600'
                                         }`}
                                     >
-                                        <Icon name="Check" />
+                                        ✓
                                     </button>
                                 </div>
 
@@ -774,287 +867,6 @@
                         </div>
                     </div>
 
-                    <div className="bg-white border rounded-lg p-4 space-y-4">
-                        <h3 className="font-bold">알림 설정</h3>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">식사 시간 알림</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">물 교체 리마인더</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">화장실 체크 알림</span>
-                        </label>
-                    </div>
-
-                    <div className="bg-white border rounded-lg p-4">
-                        <h3 className="font-bold mb-3">GitHub Gist 백업</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-sm text-gray-600">Personal Access Token</label>
-                                <input
-                                    type="password"
-                                    value={gistToken}
-                                    onChange={(e) => {
-                                        setGistToken(e.target.value);
-                                        localStorage.setItem('gistToken', e.target.value);
-                                    }}
-                                    placeholder="ghp_..."
-                                    className="w-full px-3 py-2 border rounded"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    <a href="https://github.com/settings/tokens/new" target="_blank" className="text-blue-500 underline">
-                                        토큰 생성하기
-                                    </a> (gist 권한만 필요)
-                                </p>
-                            </div>
-                            <div>
-                                <label className="text-sm text-gray-600">Gist ID</label>
-                                <input
-                                    type="text"
-                                    value={gistId}
-                                    onChange={(e) => {
-                                        setGistId(e.target.value);
-                                        localStorage.setItem('gistId', e.target.value);
-                                    }}
-                                    placeholder="Gist ID 입력"
-                                    className="w-full px-3 py-2 border rounded"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Gist ID: ec6b814025b587c361ee08f9bfb10144
-                                </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={saveToGist}
-                                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-                                >
-                                    수동 저장
-                                </button>
-                                <button
-                                    onClick={loadFromGist}
-                                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                                >
-                                    불러오기
-                                </button>
-                            </div>
-                            {syncStatus && (
-                                <p className="text-sm text-center mt-2">{syncStatus}</p>
-                            )}
-                            <div className="text-xs text-gray-500 bg-yellow-50 p-3 rounded">
-                                💡 자동 저장 활성화됨
-                                <br />• 체크, 체중 변경 시 5초 후 자동 저장
-                                <br />• 다른 기기에서도 같은 Gist ID로 동기화
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white border rounded-lg p-4 mt-4">
-                        <h3 className="font-bold mb-3">로컬 백업/복원</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <button
-                                    onClick={() => {
-                                        const data = {
-                                            catInfo: {
-                                                name: catInfo.name,
-                                                birthDate: catInfo.birthDate,
-                                                weight: catInfo.weight
-                                            },
-                                            records: dailyRecords,
-                                            dietPlan: dietPlan,
-                                            lastUpdated: new Date().toISOString()
-                                        };
-                                        const jsonStr = JSON.stringify(data, null, 2);
-                                        const blob = new Blob([jsonStr], { type: 'application/json' });
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `루_식단_백업_${new Date().toISOString().split('T')[0]}.json`;
-                                        a.click();
-                                        URL.revokeObjectURL(url);
-                                        
-                                        // 클립보드에 복사
-                                        navigator.clipboard.writeText(jsonStr).then(() => {
-                                            alert('✅ 파일 다운로드 완료!\n📋 데이터가 클립보드에도 복사되었습니다.');
-                                        });
-                                    }}
-                                    className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                                >
-                                    📥 데이터 다운로드 + 복사
-                                </button>
-                            </div>
-                            
-                            <div>
-                                <label className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer text-center block">
-                                    📤 데이터 업로드
-                                    <input
-                                        type="file"
-                                        accept=".json"
-                                        className="hidden"
-                                        onChange={(e) => {
-                                            const file = e.target.files[0];
-                                            if (file) {
-                                                const reader = new FileReader();
-                                                reader.onload = (event) => {
-                                                    try {
-                                                        const data = JSON.parse(event.target.result);
-                                                        
-                                                        // 데이터 복원
-                                                        if (data.catInfo) {
-                                                            setCatInfo({
-                                                                ...data.catInfo,
-                                                                age: calculateAge(data.catInfo.birthDate),
-                                                                targetCalories: catInfo.targetCalories
-                                                            });
-                                                        }
-                                                        
-                                                        if (data.dietPlan) {
-                                                            setDietPlan(data.dietPlan);
-                                                        }
-                                                        
-                                                        if (data.records) {
-                                                            setDailyRecords(data.records);
-                                                            localStorage.setItem('dailyRecords', JSON.stringify(data.records));
-                                                        }
-                                                        
-                                                        alert('✅ 데이터 복원 완료!');
-                                                    } catch (error) {
-                                                        alert('❌ 파일 읽기 실패');
-                                                    }
-                                                };
-                                                reader.readAsText(file);
-                                            }
-                                        }}
-                                    />
-                                </label>
-                            </div>
-                            
-                            <div>
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.readText().then(text => {
-                                            try {
-                                                const data = JSON.parse(text);
-                                                if (data.catInfo && data.records) {
-                                                    // 데이터 복원
-                                                    if (data.catInfo) {
-                                                        setCatInfo({
-                                                            ...data.catInfo,
-                                                            age: calculateAge(data.catInfo.birthDate),
-                                                            targetCalories: catInfo.targetCalories
-                                                        });
-                                                    }
-                                                    
-                                                    if (data.dietPlan) {
-                                                        setDietPlan(data.dietPlan);
-                                                    }
-                                                    
-                                                    if (data.records) {
-                                                        setDailyRecords(data.records);
-                                                        localStorage.setItem('dailyRecords', JSON.stringify(data.records));
-                                                    }
-                                                    
-                                                    alert('✅ 클립보드에서 데이터 복원 완료!');
-                                                } else {
-                                                    alert('❌ 올바른 데이터 형식이 아닙니다.');
-                                                }
-                                            } catch (error) {
-                                                alert('❌ 클립보드에 유효한 JSON 데이터가 없습니다.');
-                                            }
-                                        });
-                                    }}
-                                    className="w-full px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-                                >
-                                    📋 클립보드에서 붙여넣기
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-                <div className="space-y-4">
-                    <h2 className="text-xl font-bold mb-4">⚙️ 설정</h2>
-                    
-                    <div className="bg-white border rounded-lg p-4 space-y-4">
-                        <h3 className="font-bold">기본 정보</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-sm text-gray-600">이름</label>
-                                <input
-                                    type="text"
-                                    value={catInfo.name}
-                                    onChange={(e) => setCatInfo({...catInfo, name: e.target.value})}
-                                    className="w-full px-3 py-2 border rounded"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm text-gray-600">생일</label>
-                                <input
-                                    type="date"
-                                    value={catInfo.birthDate}
-                                    onChange={(e) => {
-                                        const newBirthDate = e.target.value;
-                                        setCatInfo({
-                                            ...catInfo, 
-                                            birthDate: newBirthDate,
-                                            age: calculateAge(newBirthDate)
-                                        });
-                                    }}
-                                    className="w-full px-3 py-2 border rounded"
-                                />
-                            </div>
-                        </div>
-                        <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
-                            💡 체중은 메인 화면에서 매일 기록하세요
-                            <br />🎯 목표 칼로리는 AI가 자동으로 계산해줍니다
-                        </div>
-                    </div>
-
-                    <div className="bg-white border rounded-lg p-4 space-y-4">
-                        <h3 className="font-bold">AI 설정 (Gemini)</h3>
-                        <div>
-                            <label className="text-sm text-gray-600">Gemini API Key</label>
-                            <input
-                                type="password"
-                                value={geminiApiKey}
-                                onChange={(e) => {
-                                    setGeminiApiKey(e.target.value);
-                                    localStorage.setItem('geminiApiKey', e.target.value);
-                                }}
-                                placeholder="AIza..."
-                                className="w-full px-3 py-2 border rounded"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                                <a href="https://makersuite.google.com/app/apikey" target="_blank" className="text-blue-500 underline">
-                                    API 키 받기
-                                </a> (무료 - Google 계정 필요)
-                            </p>
-                            <p className="text-xs text-green-600 mt-1">
-                                ✅ API 키는 자동으로 브라우저에 저장됩니다
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white border rounded-lg p-4 space-y-4">
-                        <h3 className="font-bold">알림 설정</h3>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">식사 시간 알림</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">물 교체 리마인더</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <input type="checkbox" className="w-4 h-4" defaultChecked />
-                            <span className="text-sm">화장실 체크 알림</span>
-                        </label>
-                    </div>
-
                     <div className="bg-white border rounded-lg p-4">
                         <h3 className="font-bold mb-3">GitHub Gist 백업</h3>
                         <div className="space-y-3">
@@ -1261,7 +1073,7 @@
                                         activeTab === 'today' ? 'text-purple-600' : 'text-gray-400'
                                     }`}
                                 >
-                                    <Icon name="Calendar" />
+                                    📅
                                     <span className="text-xs">오늘</span>
                                 </button>
                                 <button
@@ -1270,7 +1082,7 @@
                                         activeTab === 'report' ? 'text-purple-600' : 'text-gray-400'
                                     }`}
                                 >
-                                    <Icon name="BarChart3" />
+                                    📊
                                     <span className="text-xs">리포트</span>
                                 </button>
                                 <button
@@ -1279,7 +1091,7 @@
                                         activeTab === 'settings' ? 'text-purple-600' : 'text-gray-400'
                                     }`}
                                 >
-                                    <Icon name="Settings" />
+                                    ⚙️
                                     <span className="text-xs">설정</span>
                                 </button>
                             </div>
